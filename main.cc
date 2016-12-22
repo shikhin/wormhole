@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <cassert>
 #include <cstdlib>
 #include <ctime>
+#include "genus.h"
 #include "graph.h"
 #include "gauss.h"
 #include <iostream>
@@ -18,11 +20,13 @@ int main(int argc, char const *argv[])
 
         display_code(code);
         std::cout << "Planar? " << (planar_knot(code) ? "true" : "false") << std::endl;
+        std::cout << "Genus: " << genus(code) << std::endl;
+
         std::cout << "Enumerating r2 moves" << std::endl;
         std::vector<code_t> list = r2_undo_enumerate(code);
 
-        std::sort(list.begin(), list.end(), comparator_codes);
-        list.erase(std::unique(list.begin(), list.end(), equal_codes), list.end());
+        std::sort(list.begin(), list.end());
+        list.erase(std::unique(list.begin(), list.end()), list.end());
         for (size_t i = 0; i < list.size(); i++) {
             display_code(list[i]);
         }
@@ -34,8 +38,8 @@ int main(int argc, char const *argv[])
         }
 
         std::cout << "Un-enumerating r2 moves" << std::endl;
-        std::sort(r2_done_list.begin(), r2_done_list.end(), comparator_codes);
-        r2_done_list.erase(std::unique(r2_done_list.begin(), r2_done_list.end(), equal_codes), r2_done_list.end());
+        std::sort(r2_done_list.begin(), r2_done_list.end());
+        r2_done_list.erase(std::unique(r2_done_list.begin(), r2_done_list.end()), r2_done_list.end());
         for (size_t i = 0; i < r2_done_list.size(); i++) {
             display_code(r2_done_list[i]);
         }
@@ -43,8 +47,8 @@ int main(int argc, char const *argv[])
         std::cout << "Enumerating r1 moves" << std::endl;
         list = r1_undo_enumerate(code);
 
-        std::sort(list.begin(), list.end(), comparator_codes);
-        list.erase(std::unique(list.begin(), list.end(), equal_codes), list.end());
+        std::sort(list.begin(), list.end());
+        list.erase(std::unique(list.begin(), list.end()), list.end());
         for (size_t i = 0; i < list.size(); i++) {
             display_code(list[i]);
         }
@@ -56,17 +60,17 @@ int main(int argc, char const *argv[])
         }
 
         std::cout << "Un-enumerating r1 moves" << std::endl;
-        std::sort(r1_done_list.begin(), r1_done_list.end(), comparator_codes);
-        r1_done_list.erase(std::unique(r1_done_list.begin(), r1_done_list.end(), equal_codes), r1_done_list.end());
+        std::sort(r1_done_list.begin(), r1_done_list.end());
+        r1_done_list.erase(std::unique(r1_done_list.begin(), r1_done_list.end()), r1_done_list.end());
         for (size_t i = 0; i < r1_done_list.size(); i++) {
             display_code(r1_done_list[i]);
         }
 
         std::cout << "All neighbors" << std::endl;
-        list = enumerate_neighbors(code);
+        list = enumerate_complete_neighbors(code);
 
-        std::sort(list.begin(), list.end(), comparator_codes);
-        list.erase(std::unique(list.begin(), list.end(), equal_codes), list.end());
+        std::sort(list.begin(), list.end());
+        list.erase(std::unique(list.begin(), list.end()), list.end());
         for (size_t i = 0; i < list.size(); i++) {
             display_code(list[i]);
         }

@@ -3,7 +3,6 @@
 #include "graph.h"
 #include <iostream>
 #include "moves.h"
-#include <set>
 #include <string>
 #include "subdiag.h"
 #include <unordered_map>
@@ -14,9 +13,15 @@
 namespace std {
     template <>
     struct hash<code_t> {
-        std::size_t operator()(const code_t &k) const
+        size_t operator()(const code_t& k) const
         {
-            return std::hash<std::string>()(stringify_code(k));
+            // return std::hash<std::string>()(stringify_code(k));
+            // stolen from http://stackoverflow.com/questions/20511347/a-good-hash-function-for-a-vector
+            code_elem_t seed = k.size();
+            for (auto i: k) {
+                seed ^= i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
         }
     };
 }
@@ -24,7 +29,7 @@ namespace std {
 std::unordered_map<code_t, node_t*> graph_nodes;
 std::unordered_set<node_t*> prune_dirty;
 
-static node_t* get_node(code_t code)
+static node_t* get_node(const code_t& code)
 {
     node_t *node;
     auto iter = graph_nodes.find(code);
@@ -32,8 +37,11 @@ static node_t* get_node(code_t code)
         // not found, so we need to create the node
         node = new node_t;
         node->code = code;
-        node->sify = node->pruneify = node->neighbors_explored = false;
+        node->sify = node->pruneify = false;
+        node->neighbors_explored = node->sneighbors_explored = false;
+
         node->planar = planar_knot(code);
+
         graph_nodes[code] = node;
     } else {
         node = iter->second;
@@ -42,54 +50,73 @@ static node_t* get_node(code_t code)
     return node;
 }
 
-static bool is_planar(node_t *node)
+static bool is_planar(const code_t& code)
 {
-    return node->planar;
-}
-
-static bool is_planar(code_t code)
-{
+    // todo: measure impact of this
     return (get_node(code))->planar;
 }
 
+static void add_neighbors(node_t *node, std::vector<code_t>& neighbors)
+{
+    for (auto& iter: neighbors) {
+        node_t *neigh = get_node(iter);
+        if (node->neighbors.find(neigh) == node->neighbors.end()) {
+            node->neighbors.insert(neigh);
+            neigh->neighbors.insert(node);
+        }       
+    }
+}
+
+// explores all the special neighbors of a node
+static void explore_special_neighbors(node_t* node)
+{
+    if (node->sneighbors_explored) {
+        return;
+    }
+
+    auto neighbors = enumerate_special_neighbors(node->code);
+    add_neighbors(node, neighbors);
+
+    node->sneighbors_explored = true;
+}
+
 // explores all the neighbors of a node
-static void explore_neighbors(node_t* node)
+static void explore_complete_neighbors(node_t* node)
 {
     if (node->neighbors_explored) {
         return;
     }
 
-    auto neighbors = enumerate_neighbors(node->code);
-    for (auto iter: neighbors) {
-        node_t *neigh = get_node(iter);
-        if (node->neighbors.find(neigh) == node->neighbors.end()) {
-            node->neighbors.insert(neigh);
-            neigh->neighbors.insert(node);
-        }
+    std::vector<code_t> neighbors;
+    if (node->sneighbors_explored) {
+        neighbors = enumerate_rest_neighbors(node->code);
+    } else {
+        neighbors = enumerate_complete_neighbors(node->code);
     }
 
-    node->neighbors_explored = true;
+    add_neighbors(node, neighbors);
+    node->neighbors_explored = node->sneighbors_explored = true;
 }
 
 // make a node 's'ed
-static node_t* s_ify(node_t *node)
+static node_t* s_ify(node_t* node)
 {
     if (node->code.size() > MAX_CHORDS * 2 ||
         node->sify) {
         return node;
     }
 
-    if (planar_knot(node->code)) {
+    if (node->planar) {
         // if it's planar, it has to map to itself
         node->s.insert(node);
-        explore_neighbors(node);
+        explore_special_neighbors(node);
     } else {
         // otherwise all classical subdiagrams are a possibility
         auto subdiags = subdiagrams(node->code);
         for (auto iter: subdiags) {
             node_t *sub = get_node(iter);
-            if (is_planar(sub)) {
-                explore_neighbors(sub);
+            if (sub->planar) {
+                explore_special_neighbors(sub);
                 node->s.insert(sub);
             }
         }
@@ -99,7 +126,7 @@ static node_t* s_ify(node_t *node)
     return node;
 }
 
-node_t* s_ify(code_t code)
+node_t* s_ify(const code_t& code)
 {
     node_t* node = get_node(code);
     return s_ify(node);
@@ -113,15 +140,15 @@ node_t* prune_ify(node_t* node)
         return node;
     }
 
-
     s_ify(node);
 
     // a more exhaustive search
-    // explore_neighbors(node);
-    // all neighbors need to be 's'ed
-    // for (auto iter: node->neighbors) {
-    //     s_ify(iter->code);
-    // }
+    // todo: remove two layers and this part if unneeded
+    explore_special_neighbors(node);
+    // // all neighbors need to be 's'ed
+    for (auto iter: node->neighbors) {
+        s_ify(iter->code);
+    }
 
     // insert in set of nodes to be pruned
     prune_dirty.insert(node);
@@ -129,7 +156,7 @@ node_t* prune_ify(node_t* node)
     return node;
 }
 
-node_t* prune_ify(code_t code)
+node_t* prune_ify(const code_t& code)
 {
     node_t* node = get_node(code);
     return prune_ify(node);
@@ -152,10 +179,7 @@ bool plausible_erasure(node_t *e, node_t *d)
         // there is some f in s(n) that is either e or one step away
         // from it
         for (auto f: n->s) {
-            // std::cout << "f "; display_code(f->code);
-            // std::cout << "n "; display_code(n->code);
-            // std::cout << "d "; display_code(d->code);
-            assert(f->neighbors_explored);
+            assert(f->sneighbors_explored && e->sneighbors_explored);
             if ((f == e) || (f->neighbors.find(e) != f->neighbors.end())) {
                 found = true;
                 break;
@@ -164,11 +188,8 @@ bool plausible_erasure(node_t *e, node_t *d)
 
         // if we couldn't find any such element, not plausible
         if (!found) {
-            // std::cout << "The pesky neighbor was "; display_code(n->code);
-            // std::cout << "Enumerating S" << std::endl;
-            // for (auto f: n->s) {
-            //     display_code(f->code);
-            // }
+            // std::cout << "Erasing " << stringify_code(e->code) << " from " << stringify_code(d->code)
+            //         << " because of "; display_code(n->code);
             return false;
         }
     }
@@ -185,11 +206,6 @@ bool prune()
         auto d = *d_iter; prune_dirty.erase(d_iter);
 
         bool deleted = false;
-        // start all over after deleting an implausible erasure
-        // because s(n) changes, so some older element might not
-        // be plausible anymore
-        // std::cout << "GOING OVER "; display_code(d->code);
-        // if set is empty, implausible scenario
         for (auto e: d->s) {
             if (!plausible_erasure(e, d)) {
                 d->s.erase(e);
@@ -197,6 +213,7 @@ bool prune()
             }
         }
 
+        // if set is empty, implausible scenario
         if (d->s.empty()) {
             std::cout << "The contradiction came with "; display_code(d->code);
             return false;
@@ -212,29 +229,72 @@ bool prune()
             }
         }
     }
+
+    return true;
 }
 
 void explore()
 {
     // add the unknot
     node_t* node = prune_ify(code_t());
-    // node_t* node = prune_ify(parse_code("O+0U+1O+2U+0O+1U+2"));
 
-    // todo: fix this eventually to something standard, but tinkering
-    // right now
-    explore_neighbors(node);
+    // std::cout << node->s.size() << " subdiagram(s) of "; display_code(node->code);
+    // for (auto s_elem: node->s) {
+    //     display_code(s_elem->code);
+    // }
+    // std::cout << "-----------" << std::endl;
+
+    explore_complete_neighbors(node);
     for (auto n: node->neighbors) {
         prune_ify(n);
-        explore_neighbors(n);
+        explore_complete_neighbors(n);
         for (auto nn: n->neighbors) {
             prune_ify(nn);
-            explore_neighbors(nn);
+            explore_complete_neighbors(nn);
             for (auto nnn: nn->neighbors) {
                 prune_ify(nnn);
+                explore_special_neighbors(nnn);
+                for (auto nnnn: nnn->neighbors) {
+                    prune_ify(nnnn);
+                    break;
+                }
             }
         }
     }
-                
+
+    // for (auto iter: prune_dirty) {
+    //     std::cout << iter->s.size() << " subdiagram(s) of "; display_code(iter->code);
+    //     for (auto s_elem: iter->s) {
+    //         display_code(s_elem->code);
+    //     }
+    //     std::cout << "-----------" << std::endl;
+
+    //     for (auto n: iter->neighbors) {
+    //         if (prune_dirty.find(n) != prune_dirty.end()) continue;
+    //         std::cout << n->s.size() << " subdiagram(s) of " << stringify_code(n->code)
+    //                   << " neighbor of "; display_code(iter->code);
+    //         for (auto s_elem: n->s) {
+    //             display_code(s_elem->code);
+    //         }
+    //         std::cout << "-----------" << std::endl;
+    // }
+
+    // std::cout << "Pruning now" << std::endl;
     std::cout << "Size of prune set is " << prune_dirty.size() << std::endl;
-    std::cout << "Pruning finished with " << (prune() ? "success" : "failure") << std::endl;
+    prune();
+
+    // std::cout << "-----------" << std::endl;
+    // std::cout << node->s.size() << " subdiagram(s) of "; display_code(node->code);
+    // for (auto s_elem: node->s) {
+    //     display_code(s_elem->code);
+    // }
+    // std::cout << "-----------" << std::endl;
+
+    // for (auto n: node->neighbors) {
+    //     std::cout << n->s.size() << " subdiagram(s) of "; display_code(n->code);
+    //     for (auto s_elem: n->s) {
+    //         display_code(s_elem->code);
+    //     }
+    //     std::cout << "-----------" << std::endl;
+    // }
 }

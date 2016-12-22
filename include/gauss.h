@@ -26,18 +26,16 @@ typedef unsigned int code_elem_t;
 typedef std::vector<code_elem_t> code_t;
 
 // parse the string and return the code
-code_t parse_code(std::string s);
+code_t parse_code(const std::string& s);
 
-std::string stringify_code(code_t code);
-void display_code(code_t code);
+std::string stringify_code(const code_t& code);
+void display_code(const code_t& code);
 
 void renumber_code(code_t &code, code_elem_t max_id);
 code_t first_ordered_code(code_t code);
 
 // negative if a < b, positive if a > b, 0 if equal
-int compare_codes(code_t a, code_t b);
-bool comparator_codes(code_t a, code_t b);
-bool equal_codes(code_t a, code_t b);
+int compare_codes(const code_t& a, const code_t& b);
 
 code_t random_code(size_t max_length);
 

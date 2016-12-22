@@ -7,7 +7,7 @@
 
 // parse the string and return the code
 // returns empty code on error
-code_t parse_code(std::string s)
+code_t parse_code(const std::string& s)
 {
     code_t code; size_t length = s.length();
     for (int i = 0; i < length; ) {
@@ -47,19 +47,23 @@ code_t parse_code(std::string s)
     return first_ordered_code(code);
 }
 
-std::string stringify_code(code_t code)
+std::string stringify_code(const code_t& code)
 {
+    if (!code.size()) {
+        return "<empty>";
+    }
+
     std::string s;
-    for (int i = 0; i < code.size(); i++) {
-        s.push_back(code[i] & ELEM_OU_MASK ? 'O' : 'U');
-        s.push_back(code[i] & ELEM_SIGN_MASK ? '+' : '-');
-        s += std::to_string(code[i] >> ELEM_ID_SHIFT);
+    for (auto iter: code) {
+        s.push_back(iter & ELEM_OU_MASK ? 'O' : 'U');
+        s.push_back(iter & ELEM_SIGN_MASK ? '+' : '-');
+        s += std::to_string(ELEM_ID(iter));
     }
 
     return s;
 }
 
-void display_code(code_t code)
+void display_code(const code_t& code)
 {
     std::cout << stringify_code(code) << std::endl;
 }
@@ -73,7 +77,7 @@ void renumber_code(code_t &code, code_elem_t max_id)
     code_elem_t cur_max = 0;
     
     for (size_t i = 0; i < length; i++) {
-        code_elem_t id = code[i] >> ELEM_ID_SHIFT;
+        code_elem_t id = ELEM_ID(code[i]);
         code_elem_t flags = code[i] & (ELEM_SIGN_MASK | ELEM_OU_MASK);
 
         if (renum[id] != -1) {
@@ -98,7 +102,7 @@ code_t rotate_code(code_t code, size_t num)
 }
 
 // negative if a < b, positive if a > b, 0 if equal
-int compare_codes(code_t a, code_t b)
+int compare_codes(const code_t& a, const code_t& b)
 {
     if (a.size() < b.size()) return -1;
     else if (a.size() > b.size()) return 1;
@@ -112,43 +116,15 @@ int compare_codes(code_t a, code_t b)
     return 0;
 }
 
-bool comparator_codes(code_t a, code_t b)
-{
-    if (a.size() < b.size()) return true;
-    else if (a.size() > b.size()) return false;
-
-    for (int i = 0; i < a.size(); i++) {
-        if (a[i] < b[i]) return true;
-        else if (a[i] > b[i]) return false;
-    }
-
-    // equal
-    return false;
-}
-
-bool equal_codes(code_t a, code_t b)
-{
-    if (a.size() < b.size()) return false;
-    else if (a.size() > b.size()) return false;
-
-    for (int i = 0; i < a.size(); i++) {
-        if (a[i] < b[i]) return false;
-        else if (a[i] > b[i]) return false;
-    }
-
-    // equal
-    return true;  
-}
-
 // pick the first of them based on the ordering from compare_codes
 code_t first_ordered_code(code_t code)
 {
-    code_t first = code, prev;
+    code_t& first = code, prev = code, cur = code;
     for (int i = 1; i < code.size(); i++) {
-        prev = code;
-        code = rotate_code(prev, 1);
-        if (compare_codes(code, first) < 0) {
-            first = code;
+        prev = cur;
+        cur = rotate_code(prev, 1);
+        if (compare_codes(cur, first) < 0) {
+            first = cur;
         }
     }
 
@@ -158,7 +134,7 @@ code_t first_ordered_code(code_t code)
 code_t random_code(size_t max_length)
 {
     // get a random code of max_length
-    code_t c; //max_length = rand() % max_length;
+    code_t c;
     for (size_t i = 0; i < max_length; i++) {
         code_elem_t elem = (i << ELEM_ID_SHIFT);
         if (rand() % 2) elem |= ELEM_POSITIVE;

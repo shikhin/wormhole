@@ -8,6 +8,6 @@
 void subsets_init();
 
 // get subdiagrams of a code
-std::unordered_set<code_t> subdiagrams(code_t code);
+std::unordered_set<code_t> subdiagrams(const code_t& code);
 
 #endif /* _SUBDIAG_H */

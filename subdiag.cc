@@ -8,9 +8,15 @@
 namespace std {
     template <>
     struct hash<code_t> {
-        std::size_t operator()(const code_t &k) const
+        size_t operator()(const code_t &k) const
         {
-            return std::hash<std::string>()(stringify_code(k));
+            // return std::hash<std::string>()(stringify_code(k));
+            // stolen from http://stackoverflow.com/questions/20511347/a-good-hash-function-for-a-vector
+            code_elem_t seed = k.size();
+            for (auto i: k) {
+                seed ^= i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
         }
     };
 }
@@ -56,31 +62,37 @@ void subsets_init()
 // }
 
 // remove chords from the code based on set
-static code_t remove_chords(code_t code, std::unordered_set<code_elem_t> set)
+static code_t remove_chords(const code_t &code, const std::unordered_set<code_elem_t> &set)
 {
     code_t removed;
-    for (size_t i = 0; i < code.size(); i++) {
-        if (set.find(ELEM_ID(code[i])) != set.end()) {
-            removed.push_back(code[i]);
+    for (auto& iter: code) {
+        if (set.find(ELEM_ID(iter)) != set.end()) {
+            removed.push_back(iter);
         }
     }
 
     renumber_code(removed, code.size() / 2);
-    return first_ordered_code(removed);
+    return removed;
 }
 
 // get subdiagrams of a code
-std::unordered_set<code_t> subdiagrams(code_t code)
+std::unordered_set<code_t> subdiagrams(const code_t& code)
 {
     std::unordered_set<code_t> result;
 
     assert(code.size() / 2 <= MAX_CHORDS);
 
-    auto lists = subsets[code.size() / 2];
+    auto &lists = subsets[code.size() / 2];
     // each subset is associated with a list of what chords to remove
-    for (size_t i = 0; i < lists.size(); i++) {
-        result.insert(remove_chords(code, lists[i]));
+    for (auto& iter: lists) {
+        result.insert(remove_chords(code, iter));
     }
 
-    return result;
+    // order them after removing duplicates one
+    std::unordered_set<code_t> result_ordered;
+    for (auto& iter: result) {
+        result_ordered.insert(first_ordered_code(iter));
+    }
+
+    return result_ordered;
 }

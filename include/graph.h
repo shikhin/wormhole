@@ -9,9 +9,13 @@
 typedef struct node_t {
     code_t code;
     bool sify;
-    bool planar;
-    bool neighbors_explored;
     bool pruneify;
+
+    bool planar;
+
+    bool sneighbors_explored;
+    bool neighbors_explored;
+
     std::unordered_set<struct node_t*> s;
     std::unordered_set<struct node_t*> neighbors;
 } node_t;

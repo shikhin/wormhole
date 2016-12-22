@@ -28,7 +28,7 @@ static code_t r1_undo(code_t code, size_t x, bool positive, bool first_over)
     return first_ordered_code(code);
 }
 
-std::vector<code_t> r1_undo_enumerate(code_t code)
+std::vector<code_t> r1_undo_enumerate(const code_t& code)
 {
     std::vector<code_t> list; size_t length = code.size();
     size_t x = 0;
@@ -45,7 +45,7 @@ std::vector<code_t> r1_undo_enumerate(code_t code)
 }
 
 // do a R1 move on x
-static code_t r1_do(code_t code, size_t x)
+static code_t r1_do(const code_t& code, size_t x)
 {
     // todo: could renumber and remove in one go if it
     // matters
@@ -63,7 +63,7 @@ static code_t r1_do(code_t code, size_t x)
     return first_ordered_code(moved);
 }
 
-std::vector<code_t> r1_do_enumerate(code_t code)
+std::vector<code_t> r1_do_enumerate(const code_t& code)
 {
     std::vector<code_t> list; size_t length = code.size();
     if (length < 2) {
@@ -73,7 +73,7 @@ std::vector<code_t> r1_do_enumerate(code_t code)
     for (size_t x = 0; x < length; x++) {
         size_t x_ = (x + 1) % length;
         // check if x and x_ meet the requirements
-        if ((code[x] >> ELEM_ID_SHIFT) == (code[x_] >> ELEM_ID_SHIFT)) {
+        if (ELEM_ID(code[x]) == ELEM_ID(code[x_])) {
             list.push_back(r1_do(code, x));
         }
     }
@@ -109,17 +109,17 @@ static code_t r2_undo(code_t code, size_t x, size_t y,
         fourth = second ^ ELEM_OVER;
     }
 
-    code.insert(code.begin() + y, fourth);
-    code.insert(code.begin() + y, third);
-    code.insert(code.begin() + x, second);
-    code.insert(code.begin() + x, first);
+    code_t ins_1; ins_1.push_back(third); ins_1.push_back(fourth);
+    code.insert(code.begin() + y, ins_1.begin(), ins_1.end());
+    code_t ins_2; ins_2.push_back(first); ins_2.push_back(second);
+    code.insert(code.begin() + x, ins_2.begin(), ins_2.end());
 
     // standardize it
     renumber_code(code, code.size() / 2);
     return first_ordered_code(code);
 }
 
-std::vector<code_t> r2_undo_enumerate(code_t code)
+std::vector<code_t> r2_undo_enumerate(const code_t& code)
 {
     std::vector<code_t> list; size_t length = code.size();
     size_t x = 0, y = 0;
@@ -132,7 +132,6 @@ std::vector<code_t> r2_undo_enumerate(code_t code)
             }
             y++;
         } while (y < length);
-
         x++;
     } while (x < length);
 
@@ -140,7 +139,7 @@ std::vector<code_t> r2_undo_enumerate(code_t code)
 }
 
 // do a R2 move on x and y
-static code_t r2_do(code_t code, size_t x, size_t y)
+static code_t r2_do(const code_t& code, size_t x, size_t y)
 {
     // todo: could renumber and remove in one go if it
     // matters
@@ -159,7 +158,7 @@ static code_t r2_do(code_t code, size_t x, size_t y)
     return first_ordered_code(moved);
 }
 
-std::vector<code_t> r2_do_enumerate(code_t code)
+std::vector<code_t> r2_do_enumerate(const code_t& code)
 {
     std::vector<code_t> list; int length = code.size();
 
@@ -213,17 +212,18 @@ static code_t r3_vanilla(code_t code, size_t x, size_t y, size_t z)
 }
 
 // a R3 move, and renumber and reorder
-static code_t r3(code_t code, size_t x, size_t y, size_t z)
+static code_t r3(const code_t& code, size_t x, size_t y, size_t z)
 {
     code_t moved = r3_vanilla(code, x, y, z);
     renumber_code(moved, moved.size() / 2);
     return first_ordered_code(moved);
 }
 
-static bool is_triangular(code_t code, size_t x, size_t y, size_t z)
+static bool is_triangular(const code_t& code, size_t x, size_t x_, 
+                                              size_t y, size_t y_,
+                                              size_t z, size_t z_)
 {
     size_t length = code.size();
-    size_t x_ = (x + 1) % length, y_ = (y + 1) % length, z_ = (z + 1) % length;
     code_elem_t first = ELEM_ID(code[x]),
                 second = ELEM_ID(code[x_]),
                 third = ELEM_ID(code[y_]);
@@ -259,10 +259,11 @@ static bool is_triangular(code_t code, size_t x, size_t y, size_t z)
 
 // the case with the single crossing (single crossing, triangular,
 // crossingular...)
-static bool is_crossingular(code_t code, size_t x, size_t y, size_t z)
+static bool is_crossingular(const code_t& code, size_t x, size_t x_,
+                                                size_t y, size_t y_,
+                                                size_t z, size_t z_)
 {
     size_t length = code.size();
-    size_t x_ = (x + 1) % length, y_ = (y + 1) % length, z_ = (z + 1) % length;
     code_elem_t first = ELEM_ID(code[x]),
                 second = ELEM_ID(code[x_]),
                 third = ELEM_ID(code[y_]);
@@ -280,7 +281,7 @@ static bool is_crossingular(code_t code, size_t x, size_t y, size_t z)
             return false;
         }
 
-        // check the over/under pattern is zfine
+        // check the over/under pattern is fine
         if (OVER(code[x]) != OVER(code[y_])) {
             return false;
         }
@@ -323,25 +324,22 @@ static bool is_crossingular(code_t code, size_t x, size_t y, size_t z)
 }
 
 // check if we can do a r3 move at x, y, z
-static bool can_r3(code_t code, size_t x, size_t y, size_t z)
+static bool can_r3(const code_t& code, size_t x, size_t y, size_t z)
 {
     // note: horrible, HORRIBLE, code, but I could not think of a better way to do this
 
-    // see if they match these without swapping
-    if (is_triangular(code, x, y, z) || is_crossingular(code, x, y, z)) {
-        return true;
-    }
+    size_t x_ = (x + 1) % code.size(), y_ = (y + 1) % code.size(), z_ = (z + 1) % code.size();
 
-    // see if they match with swapping
-    code_t swapped = r3_vanilla(code, x, y, z);
-    if (is_triangular(swapped, x, y, z) || is_crossingular(swapped, x, y, z)) {
+    // see if they match these without swapping
+    if (is_triangular(code, x, x_, y, y_, z, z_) || is_crossingular(code, x, x_, y, y_, z, z_) ||
+        is_triangular(code, x_, x, y_, y, z_, z) || is_crossingular(code, x_, x, y_, y, z_, z)) {
         return true;
     }
 
     return false;
 }
 
-std::vector<code_t> r3_enumerate(code_t code)
+std::vector<code_t> r3_enumerate(const code_t& code)
 {
     std::vector<code_t> list; size_t length = code.size();
     if (length < 6) {
@@ -363,13 +361,12 @@ std::vector<code_t> r3_enumerate(code_t code)
 }
 
 // enumerate neighbors of code
-std::vector<code_t> enumerate_neighbors(code_t code)
+std::vector<code_t> enumerate_complete_neighbors(const code_t& code)
 {
     std::vector<code_t> list, t;
 
     // r1
-    t = r1_do_enumerate(code);
-    list.insert(list.end(), t.begin(), t.end());
+    list = r1_do_enumerate(code);
     t = r1_undo_enumerate(code);
     list.insert(list.end(), t.begin(), t.end());
 
@@ -381,6 +378,41 @@ std::vector<code_t> enumerate_neighbors(code_t code)
 
     // r3
     t = r3_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+
+    return list;
+}
+
+// enumerate neighbors of code such that if enumerated on X and Y, they'll
+// be connected if they can be
+std::vector<code_t> enumerate_special_neighbors(const code_t& code)
+{
+    std::vector<code_t> list, t;
+
+    // r1
+    list = r1_do_enumerate(code);
+
+    // r2
+    t = r2_do_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+
+    // r3
+    t = r3_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+
+    return list;
+}
+
+// enumerates neighbors not enumerated by rest
+std::vector<code_t> enumerate_rest_neighbors(const code_t& code)
+{
+    std::vector<code_t> list, t;
+
+    // r1
+    list = r1_undo_enumerate(code);
+
+    // r2
+    t = r2_undo_enumerate(code);
     list.insert(list.end(), t.begin(), t.end());
 
     return list;
