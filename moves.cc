@@ -2,13 +2,52 @@
 #include <set>
 #include <vector>
 
+// cleans up a movie so the unsanitary versions are the ones that are displayed
+// yes, some people like unsanitary movies
+void cleanup_movie(std::vector<std::string> movie)
+{
+    std::vector<code_t> list;
+    for (auto &str: movie) {
+        list.push_back(parse_code(str));
+    }
+
+    auto prev = list[0];
+    for (auto cur: list) {
+        auto neighbors = enumerate_complete_unsan_neighbors(prev);
+        code_t next = code_t();
+        for (auto iter: neighbors) {
+            auto san = iter;
+
+            size_t max = 0;
+            for (auto code_iter: san) {
+                max = std::max(max, (size_t) ELEM_ID(code_iter));
+            }
+            renumber_code(san, max + 1);
+            san = first_ordered_code(san);
+
+            if (!compare_codes(san, cur)) {
+                prev = iter;
+                break;
+            }
+        }
+        display_code(prev);
+    }
+}
+
 // inserts a R1 move before x
 // positive         - if the sign is positive
 // first_over       - if first element is over
-static code_t r1_undo(code_t code, size_t x, bool positive, bool first_over)
+static code_t r1_undo_unsan(code_t code, size_t x, bool positive, bool first_over)
 {
-    code_elem_t first, second;
-    first = (code.size() / 2) << ELEM_ID_SHIFT;
+    code_elem_t first;
+
+    ssize_t max = -1;
+    for (auto iter: code) {
+        max = std::max(max, (ssize_t) ELEM_ID(iter));
+    }
+
+    // first = (code.size() / 2) << ELEM_ID_SHIFT;
+    first = (max + 1) << ELEM_ID_SHIFT;
     if (positive) {
         first |= ELEM_POSITIVE;
     }
@@ -18,17 +57,25 @@ static code_t r1_undo(code_t code, size_t x, bool positive, bool first_over)
     }
 
     // the second is the same as first, just with OVER bit reversed
-    second = first ^ ELEM_OVER;
-
-    code_t ins; ins.push_back(first); ins.push_back(second);
+    code_t ins; ins.push_back(first); ins.push_back(first ^ ELEM_OVER);
     code.insert(code.begin() + x, ins.begin(), ins.end());
+
+    return code;
+}
+
+// inserts a R1 move before x
+// positive         - if the sign is positive
+// first_over       - if first element is over
+static code_t r1_undo(code_t code, size_t x, bool positive, bool first_over)
+{
+    code = r1_undo_unsan(code, x, positive, first_over);
 
     // standardize it
     renumber_code(code, code.size() / 2);
     return first_ordered_code(code);
 }
 
-std::vector<code_t> r1_undo_enumerate(const code_t& code)
+std::vector<code_t> r1_undo_raw_enumerate(const code_t& code, code_t (*r1_undo)(code_t, size_t, bool, bool))
 {
     std::vector<code_t> list; size_t length = code.size();
     size_t x = 0;
@@ -44,11 +91,19 @@ std::vector<code_t> r1_undo_enumerate(const code_t& code)
     return list;
 }
 
-// do a R1 move on x
-static code_t r1_do(const code_t& code, size_t x)
+std::vector<code_t> r1_undo_enumerate(const code_t& code)
 {
-    // todo: could renumber and remove in one go if it
-    // matters
+    return r1_undo_raw_enumerate(code, r1_undo);
+}
+
+std::vector<code_t> r1_undo_unsan_enumerate(const code_t& code)
+{
+    return r1_undo_raw_enumerate(code, r1_undo_unsan);
+}
+
+// do a R1 move on x
+static code_t r1_do_unsan(const code_t& code, size_t x)
+{
     code_t moved; size_t length = code.size();
     for (size_t i = 0; i < length; i++) {
         if ((i == x) || (i == ((x + 1) % length))) {
@@ -59,11 +114,19 @@ static code_t r1_do(const code_t& code, size_t x)
         moved.push_back(code[i]);
     }
 
+    return moved;
+}
+
+// do a R1 move on x
+static code_t r1_do(const code_t& code, size_t x)
+{
+    code_t moved = r1_do_unsan(code, x);
+
     renumber_code(moved, code.size() / 2);
     return first_ordered_code(moved);
 }
 
-std::vector<code_t> r1_do_enumerate(const code_t& code)
+std::vector<code_t> r1_do_raw_enumerate(const code_t& code, code_t (*r1_do)(const code_t&, size_t))
 {
     std::vector<code_t> list; size_t length = code.size();
     if (length < 2) {
@@ -81,15 +144,32 @@ std::vector<code_t> r1_do_enumerate(const code_t& code)
     return list;
 }
 
+std::vector<code_t> r1_do_enumerate(const code_t& code)
+{
+    return r1_do_raw_enumerate(code, r1_do);
+}
+
+std::vector<code_t> r1_do_unsan_enumerate(const code_t& code)
+{
+    return r1_do_raw_enumerate(code, r1_do_unsan);
+}
+
 // inserts a R2 move before y and x, in that order
 // first_positive   - if first ID is positive
 // first_over       - if first pair is over
 // flip             - if the order is flipped in second part
-static code_t r2_undo(code_t code, size_t x, size_t y,
+static code_t r2_undo_unsan(code_t code, size_t x, size_t y,
                bool first_positive, bool first_over, bool flip)
 {
     code_elem_t first, second, third, fourth;
-    first = (code.size() / 2) << ELEM_ID_SHIFT; second = (code.size() / 2 + 1) << ELEM_ID_SHIFT;
+
+    ssize_t max = -1;
+    for (auto iter: code) {
+        max = std::max(max, (ssize_t) ELEM_ID(iter));
+    }
+
+    first = (max + 1) << ELEM_ID_SHIFT; second = (max + 2) << ELEM_ID_SHIFT;
+    // first = (code.size() / 2) << ELEM_ID_SHIFT; second = (code.size() / 2 + 1) << ELEM_ID_SHIFT;
     if (first_positive) {
         first |= ELEM_POSITIVE;
     } else {
@@ -114,12 +194,24 @@ static code_t r2_undo(code_t code, size_t x, size_t y,
     code_t ins_2; ins_2.push_back(first); ins_2.push_back(second);
     code.insert(code.begin() + x, ins_2.begin(), ins_2.end());
 
-    // standardize it
+    return code;
+}
+
+// inserts a R2 move before y and x, in that order
+// first_positive   - if first ID is positive
+// first_over       - if first pair is over
+// flip             - if the order is flipped in second part
+static code_t r2_undo(code_t code, size_t x, size_t y,
+               bool first_positive, bool first_over, bool flip)
+{
+    code = r2_undo_unsan(code, x, y, first_positive, first_over, flip);
+
     renumber_code(code, code.size() / 2);
     return first_ordered_code(code);
 }
 
-std::vector<code_t> r2_undo_enumerate(const code_t& code)
+std::vector<code_t> r2_undo_raw_enumerate(const code_t& code,
+                                            code_t (*r2_undo)(code_t, size_t, size_t, bool, bool, bool))
 {
     std::vector<code_t> list; size_t length = code.size();
     size_t x = 0, y = 0;
@@ -138,11 +230,20 @@ std::vector<code_t> r2_undo_enumerate(const code_t& code)
     return list;
 }
 
-// do a R2 move on x and y
-static code_t r2_do(const code_t& code, size_t x, size_t y)
+
+std::vector<code_t> r2_undo_enumerate(const code_t& code)
 {
-    // todo: could renumber and remove in one go if it
-    // matters
+    return r2_undo_raw_enumerate(code, r2_undo);
+}
+
+std::vector<code_t> r2_undo_unsan_enumerate(const code_t& code)
+{
+    return r2_undo_raw_enumerate(code, r2_undo_unsan);
+}
+
+// do a R2 move on x and y
+static code_t r2_do_unsan(const code_t& code, size_t x, size_t y)
+{
     code_t moved; size_t length = code.size();
     for (size_t i = 0; i < length; i++) {
         if ((i == x) || (i == ((x + 1) % length)) ||
@@ -154,11 +255,19 @@ static code_t r2_do(const code_t& code, size_t x, size_t y)
         moved.push_back(code[i]);
     }
 
+    return moved;
+}
+
+// do a R2 move on x and y
+static code_t r2_do(const code_t& code, size_t x, size_t y)
+{
+    code_t moved = r2_do_unsan(code, x, y);
+
     renumber_code(moved, code.size() / 2);
     return first_ordered_code(moved);
 }
 
-std::vector<code_t> r2_do_enumerate(const code_t& code)
+std::vector<code_t> r2_do_raw_enumerate(const code_t& code, code_t (*r2_do)(const code_t&, size_t, size_t))
 {
     std::vector<code_t> list; int length = code.size();
 
@@ -189,6 +298,16 @@ std::vector<code_t> r2_do_enumerate(const code_t& code)
     return list;
 }
 
+std::vector<code_t> r2_do_enumerate(const code_t& code)
+{
+    return r2_do_raw_enumerate(code, r2_do);
+}
+
+std::vector<code_t> r2_do_unsan_enumerate(const code_t& code)
+{
+    return r2_do_raw_enumerate(code, r2_do_unsan);
+}
+
 // a R3 move at x, y, z presuming it's valid
 // don't renumber or reorder
 static code_t r3_vanilla(code_t code, size_t x, size_t y, size_t z)
@@ -212,14 +331,21 @@ static code_t r3_vanilla(code_t code, size_t x, size_t y, size_t z)
 }
 
 // a R3 move, and renumber and reorder
+static code_t r3_unsan(const code_t& code, size_t x, size_t y, size_t z)
+{
+    return r3_vanilla(code, x, y, z);
+}
+
+// a R3 move, and renumber and reorder
 static code_t r3(const code_t& code, size_t x, size_t y, size_t z)
 {
     code_t moved = r3_vanilla(code, x, y, z);
+
     renumber_code(moved, moved.size() / 2);
     return first_ordered_code(moved);
 }
 
-static bool is_triangular(const code_t& code, size_t x, size_t x_, 
+static bool is_triangular(const code_t& code, size_t x, size_t x_,
                                               size_t y, size_t y_,
                                               size_t z, size_t z_)
 {
@@ -339,7 +465,7 @@ static bool can_r3(const code_t& code, size_t x, size_t y, size_t z)
     return false;
 }
 
-std::vector<code_t> r3_enumerate(const code_t& code)
+std::vector<code_t> r3_raw_enumerate(const code_t& code, code_t (*r3)(const code_t&, size_t, size_t, size_t))
 {
     std::vector<code_t> list; size_t length = code.size();
     if (length < 6) {
@@ -360,6 +486,16 @@ std::vector<code_t> r3_enumerate(const code_t& code)
     return list;
 }
 
+std::vector<code_t> r3_enumerate(const code_t& code)
+{
+    return r3_raw_enumerate(code, r3);
+}
+
+std::vector<code_t> r3_unsan_enumerate(const code_t& code)
+{
+    return r3_raw_enumerate(code, r3_unsan);
+}
+
 // enumerate neighbors of code
 std::vector<code_t> enumerate_complete_neighbors(const code_t& code)
 {
@@ -378,6 +514,29 @@ std::vector<code_t> enumerate_complete_neighbors(const code_t& code)
 
     // r3
     t = r3_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+
+    return list;
+}
+
+// enumerate neighbors of code
+std::vector<code_t> enumerate_complete_unsan_neighbors(const code_t& code)
+{
+    std::vector<code_t> list, t;
+
+    // r1
+    list = r1_do_unsan_enumerate(code);
+    t = r1_undo_unsan_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+
+    // r2
+    t = r2_do_unsan_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+    t = r2_undo_unsan_enumerate(code);
+    list.insert(list.end(), t.begin(), t.end());
+
+    // r3
+    t = r3_unsan_enumerate(code);
     list.insert(list.end(), t.begin(), t.end());
 
     return list;
@@ -404,7 +563,7 @@ std::vector<code_t> enumerate_special_neighbors(const code_t& code)
 }
 
 // enumerates neighbors not enumerated by rest
-std::vector<code_t> enumerate_rest_neighbors(const code_t& code)
+std::vector<code_t> enumerate_nonspecial_neighbors(const code_t& code)
 {
     std::vector<code_t> list, t;
 

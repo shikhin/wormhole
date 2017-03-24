@@ -9,7 +9,7 @@
 // returns empty code on error
 code_t parse_code(const std::string& s)
 {
-    code_t code; size_t length = s.length();
+    code_t code; size_t length = s.length(); size_t max = 0;
     for (int i = 0; i < length; ) {
         // can skip whitespace between elements
         if (std::isspace(s[i])) {
@@ -39,11 +39,13 @@ code_t parse_code(const std::string& s)
             id = (id * 10) + (s[i++] - '0');
         }
 
+        max = std::max(max, (size_t) id);
         // todo: someday check for overflow, maybe
         e |= (id << ELEM_ID_SHIFT);
         code.push_back(e);
     }
 
+    renumber_code(code, std::max(max + 1, code.size() / 2 + 1));
     return first_ordered_code(code);
 }
 

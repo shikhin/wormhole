@@ -15,8 +15,6 @@ int main(int argc, char const *argv[])
 {
     if (argc > 1) {
         code_t code = parse_code(std::string(argv[1]));
-        renumber_code(code, code.size() / 2 + 1);
-        code = first_ordered_code(code);
 
         display_code(code);
         std::cout << "Planar? " << (planar_knot(code) ? "true" : "false") << std::endl;
@@ -80,6 +78,20 @@ int main(int argc, char const *argv[])
 
     srand(time(NULL));
     subsets_init();
+
+#if 0
+    std::vector<std::string> movie;
+    movie.push_back("U-0U-1O-2O+3U+3U-2U+4O+5O-1O+4U+5O+6U+6O-0");
+    movie.push_back("U-0U-1U-2U+3O-4O+5U+5U-4U+6O+7O-1O+6O+3O-2U+7O+8U+8O-0");
+    movie.push_back("U-0U-1U-2U+3U+4O+5O-1O+4O+3O-2U+5O+6U+6O-0");
+    movie.push_back("U-0U-1U-2O-3O+4U+4U-3U+5U+6O+7O-1O+6O+5O-2U+7O+8U+8O-0");
+    movie.push_back("U-0U-1U-2O-3O+4U+4U-3U+5U+6O+7O-1O+6O+5O-2U+7O-0");
+    movie.push_back("U-0U-1U-2O-3O+4U+4U-3U+5U+6O-0O+7O+6O+5O-2O-1U+7");
+    movie.push_back("U-0O-0O+1O-2O-3U+4U-5U-3U-2O-6O+7U+7U-6U+8U+9O-5O+4O+9O+8U+1");
+    movie.push_back("U-0O-0O+1O-2O-3U-3U-2O-4O+5U+5U-4U+6U+7O+7O+6U+1");
+
+    cleanup_movie(movie);
+#endif
 
     explore();
 
