@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+// #define FLAT_KNOTS
+
 typedef unsigned int code_elem_t;
 
 // 1 -> positive, 0 -> negative
@@ -12,14 +14,25 @@ typedef unsigned int code_elem_t;
 
 #define SIGN(x)         (((x) & ELEM_POSITIVE) ? +1 : -1)
 
+#ifdef FLAT_KNOTS
+
+#define ELEM_FLAGS_MASK	(ELEM_SIGN_MASK)
+#define ELEM_ID_MASK	(~ELEM_FLAGS_MASK)
+#define ELEM_ID_SHIFT	1
+
+#else
+
 // 1 -> O, 0 -> U
 #define ELEM_OU_MASK    (1 << 1)
 #define ELEM_OVER       (1 << 1)
 
 #define OVER(x)         ((x) & ELEM_OVER)
 
-#define ELEM_ID_MASK    ~(ELEM_SIGN_MASK | ELEM_OU_MASK)
+#define ELEM_FLAGS_MASK (ELEM_SIGN_MASK | ELEM_OU_MASK)
+#define ELEM_ID_MASK    (~ELEM_FLAGS_MASK)
 #define ELEM_ID_SHIFT   2
+
+#endif
 
 #define ELEM_ID(x)      ((x) >> ELEM_ID_SHIFT)
 

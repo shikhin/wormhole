@@ -10,7 +10,8 @@
 
 // #define TEST_MENU
 // #define TEST_MENU_LIST
-#define TEST_BRUTE
+// #define TEST_BRUTE
+#define TEST_ANY_RETRACTION
 
 typedef struct menu_t {
     std::set<struct node_t*> menu;
@@ -27,7 +28,7 @@ typedef struct menu_t {
 
 typedef struct node_t {
     code_t code;
-    int genus;
+    bool planar;
 
 #ifdef TEST_BRUTE
     size_t index;

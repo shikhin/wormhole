@@ -48,6 +48,7 @@ typedef struct edge {
     }
 } edge_t;
 
+#ifndef FLAT_KNOTS
 // takes in a gauss code and returns true if it's planar/classical
 int genus(const code_t& input_code)
 {
@@ -65,7 +66,6 @@ int genus(const code_t& input_code)
     for (auto& iter: input_code) {
         // rewrite it so element U i preserves its sign, and O i is just
         // the integer
-        // also increment i by 1 so element 0 has a distinctive sign
         vertex_t v; v.i = ELEM_ID(iter);
         if (!(iter & ELEM_OU_MASK)) {
             v.sign = (sign_t) SIGN(iter);
@@ -127,3 +127,4 @@ int genus(const code_t& input_code)
 
     return (2 - (faces - vertices)) / 2;
 }
+#endif

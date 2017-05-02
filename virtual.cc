@@ -10,12 +10,6 @@
 #include <utility>
 
 // takes in a gauss code and returns true if it's planar/classical
-bool planar_knot(const code_t& code)
-{
-    return (genus(code) == 0);
-}
-
-// takes in a gauss code and returns true if it's planar/classical
 // the cubic version
 bool planar_knot_cubic(const code_t& input_code)
 {
@@ -28,9 +22,11 @@ bool planar_knot_cubic(const code_t& input_code)
         // rewrite it so element O i preserves its sign, and U i flips its
         // also increment i by 1 so element 0 has a distinctive sign
         int elem = (ELEM_ID(iter) + 1) * SIGN(iter);
+#ifndef FLAT_KNOTS
         if (!(iter & ELEM_OU_MASK)) {
             elem *= -1;
         }
+#endif
 
         code.push_back(elem);
     }
@@ -96,4 +92,14 @@ bool planar_knot_cubic(const code_t& input_code)
     }
 
     return true;
+}
+
+// takes in a gauss code and returns true if it's planar/classical
+bool planar_knot(const code_t& code)
+{
+#ifndef FLAT_KNOTS
+    return (genus(code) == 0);
+#else
+    return planar_knot_cubic(code);
+#endif
 }

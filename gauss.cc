@@ -17,17 +17,22 @@ code_t parse_code(const std::string& s)
         }
 
         code_elem_t e = 0;
+#ifndef FLAT_KNOTS
         if (s[i] == 'O') {
             e |= ELEM_OVER;
         } else if (s[i] != 'U') {
             return code_t();
         }
-
         if (++i >= length) return code_t();
 
-        if (s[i] == '+') {
+        char positive = '+', negative = '-';
+#else
+        char positive = 'R', negative = 'L';
+#endif  
+
+        if (s[i] == positive) {
             e |= ELEM_POSITIVE;
-        } else if (s[i] != '-') {
+        } else if (s[i] != negative) {
             return code_t();
         }
 
@@ -57,8 +62,12 @@ std::string stringify_code(const code_t& code)
 
     std::string s;
     for (auto iter: code) {
+#ifdef FLAT_KNOTS
+        s.push_back(iter & ELEM_SIGN_MASK ? 'R' : 'L');
+#else
         s.push_back(iter & ELEM_OU_MASK ? 'O' : 'U');
         s.push_back(iter & ELEM_SIGN_MASK ? '+' : '-');
+#endif
         s += std::to_string(ELEM_ID(iter));
     }
 
@@ -80,7 +89,7 @@ void renumber_code(code_t &code, code_elem_t max_id)
     
     for (size_t i = 0; i < length; i++) {
         code_elem_t id = ELEM_ID(code[i]);
-        code_elem_t flags = code[i] & (ELEM_SIGN_MASK | ELEM_OU_MASK);
+        code_elem_t flags = code[i] & ELEM_FLAGS_MASK;
 
         if (renum[id] != -1) {
             code[i] = (renum[id] << ELEM_ID_SHIFT) | flags;
@@ -138,9 +147,14 @@ code_t random_code(size_t max_length)
     // get a random code of max_length
     code_t c;
     for (size_t i = 0; i < max_length; i++) {
+#ifndef FLAT_KNOTS
         code_elem_t elem = (i << ELEM_ID_SHIFT);
         if (rand() % 2) elem |= ELEM_POSITIVE;
         c.push_back(elem); c.push_back(elem | ELEM_OVER);
+#else
+        code_elem_t elem = (i << ELEM_ID_SHIFT);
+        c.push_back(elem); c.push_back(elem | ELEM_POSITIVE);
+#endif
     }
 
     std::random_shuffle(c.begin(), c.end());

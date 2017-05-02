@@ -35,9 +35,13 @@ void cleanup_movie(std::vector<std::string> movie)
 }
 
 // inserts a R1 move before x
-// positive         - if the sign is positive
+// positive         - if the (first, for flat knots) sign is positive
 // first_over       - if first element is over
+#ifdef FLAT_KNOTS
+static code_t r1_undo_unsan(code_t code, size_t x, bool positive)
+#else
 static code_t r1_undo_unsan(code_t code, size_t x, bool positive, bool first_over)
+#endif
 {
     code_elem_t first;
 
@@ -52,12 +56,19 @@ static code_t r1_undo_unsan(code_t code, size_t x, bool positive, bool first_ove
         first |= ELEM_POSITIVE;
     }
 
+#ifndef FLAT_KNOTS
     if (first_over) {
         first |= ELEM_OVER;
     }
+#endif
 
-    // the second is the same as first, just with OVER bit reversed
-    code_t ins; ins.push_back(first); ins.push_back(first ^ ELEM_OVER);
+    // the second is the same as first, just with OVER/SIGN bit reversed
+    code_t ins; ins.push_back(first);
+#ifndef FLAT_KNOTS
+    ins.push_back(first ^ ELEM_OVER);
+#else
+    ins.push_back(first ^ ELEM_POSITIVE);
+#endif
     code.insert(code.begin() + x, ins.begin(), ins.end());
 
     return code;
@@ -66,25 +77,41 @@ static code_t r1_undo_unsan(code_t code, size_t x, bool positive, bool first_ove
 // inserts a R1 move before x
 // positive         - if the sign is positive
 // first_over       - if first element is over
+#ifdef FLAT_KNOTS
+static code_t r1_undo(code_t code, size_t x, bool positive)
+#else
 static code_t r1_undo(code_t code, size_t x, bool positive, bool first_over)
+#endif
 {
+#ifdef FLAT_KNOTS
+    code = r1_undo_unsan(code, x, positive);
+#else
     code = r1_undo_unsan(code, x, positive, first_over);
+#endif
 
     // standardize it
     renumber_code(code, code.size() / 2);
     return first_ordered_code(code);
 }
 
+#ifdef FLAT_KNOTS
+std::vector<code_t> r1_undo_raw_enumerate(const code_t& code, code_t (*r1_undo)(code_t, size_t, bool))
+#else
 std::vector<code_t> r1_undo_raw_enumerate(const code_t& code, code_t (*r1_undo)(code_t, size_t, bool, bool))
+#endif
 {
     std::vector<code_t> list; size_t length = code.size();
     size_t x = 0;
     do {
+#ifdef FLAT_KNOTS
+        list.push_back(r1_undo(code, x, false));
+        list.push_back(r1_undo(code, x, true));   
+#else
         // 4 possible choices, so just go over all of them
         for (int i = 0; i < 4; i++) {
             list.push_back(r1_undo(code, x, (i >> 0) & 1, (i >> 1) & 1));
         }
-
+#endif
         x++;
     } while (x < length);
 
@@ -158,8 +185,13 @@ std::vector<code_t> r1_do_unsan_enumerate(const code_t& code)
 // first_positive   - if first ID is positive
 // first_over       - if first pair is over
 // flip             - if the order is flipped in second part
+#ifdef FLAT_KNOTS
+static code_t r2_undo_unsan(code_t code, size_t x, size_t y,
+               bool first_positive, bool flip)
+#else
 static code_t r2_undo_unsan(code_t code, size_t x, size_t y,
                bool first_positive, bool first_over, bool flip)
+#endif
 {
     code_elem_t first, second, third, fourth;
 
@@ -176,11 +208,22 @@ static code_t r2_undo_unsan(code_t code, size_t x, size_t y,
         second |= ELEM_POSITIVE;
     }
 
+#ifndef FLAT_KNOTS
     if (first_over) {
         first |= ELEM_OVER;
         second |= ELEM_OVER;
     }
+#endif
 
+#ifdef FLAT_KNOTS
+    if (flip) {
+        third = second ^ ELEM_POSITIVE;
+        fourth = first ^ ELEM_POSITIVE;
+    } else {
+        third = first ^ ELEM_POSITIVE;
+        fourth = second ^ ELEM_POSITIVE;
+    }
+#else
     if (flip) {
         third = second ^ ELEM_OVER;
         fourth = first ^ ELEM_OVER;
@@ -188,6 +231,7 @@ static code_t r2_undo_unsan(code_t code, size_t x, size_t y,
         third = first ^ ELEM_OVER;
         fourth = second ^ ELEM_OVER;
     }
+#endif
 
     code_t ins_1; ins_1.push_back(third); ins_1.push_back(fourth);
     code.insert(code.begin() + y, ins_1.begin(), ins_1.end());
@@ -201,27 +245,48 @@ static code_t r2_undo_unsan(code_t code, size_t x, size_t y,
 // first_positive   - if first ID is positive
 // first_over       - if first pair is over
 // flip             - if the order is flipped in second part
+#ifdef FLAT_KNOTS
+static code_t r2_undo(code_t code, size_t x, size_t y,
+               bool first_positive, bool flip)
+#else
 static code_t r2_undo(code_t code, size_t x, size_t y,
                bool first_positive, bool first_over, bool flip)
+#endif
 {
+#ifdef FLAT_KNOTS
+    code = r2_undo_unsan(code, x, y, first_positive, flip);
+#else
     code = r2_undo_unsan(code, x, y, first_positive, first_over, flip);
-
+#endif
     renumber_code(code, code.size() / 2);
     return first_ordered_code(code);
 }
 
+#ifdef FLAT_KNOTS
+std::vector<code_t> r2_undo_raw_enumerate(const code_t& code,
+                                            code_t (*r2_undo)(code_t, size_t, size_t, bool, bool))
+#else
 std::vector<code_t> r2_undo_raw_enumerate(const code_t& code,
                                             code_t (*r2_undo)(code_t, size_t, size_t, bool, bool, bool))
+#endif
 {
     std::vector<code_t> list; size_t length = code.size();
     size_t x = 0, y = 0;
     do {
         y = x;
         do {
+#ifdef FLAT_KNOTS
+            // 4 possible choices, so just go over all of them
+            for (int i = 0; i < 4; i++) {
+                list.push_back(r2_undo(code, x, y, (i >> 0) & 1, (i >> 1) & 1));
+            }
+#else
             // 8 possible choices, so just go over all of them
             for (int i = 0; i < 8; i++) {
                 list.push_back(r2_undo(code, x, y, (i >> 0) & 1, (i >> 1) & 1, (i >> 2) & 1));
             }
+#endif
+
             y++;
         } while (y < length);
         x++;
@@ -275,20 +340,25 @@ std::vector<code_t> r2_do_raw_enumerate(const code_t& code, code_t (*r2_do)(cons
         size_t x_ = x + 1;
         // check if x and x_ meet the requirements
         code_elem_t id_x = code[x], id_x_ = code[x_];
-        if ((id_x & ELEM_SIGN_MASK) == (id_x_ & ELEM_SIGN_MASK) ||
-            (id_x & ELEM_OU_MASK) != (id_x_ & ELEM_OU_MASK)) {
+        if ((id_x & ELEM_SIGN_MASK) == (id_x_ & ELEM_SIGN_MASK)) {
             continue;
         }
 
-        id_x >>= ELEM_ID_SHIFT; id_x_ >>= ELEM_ID_SHIFT;
+#ifndef FLAT_KNOTS
+        if ((id_x & ELEM_OU_MASK) != (id_x_ & ELEM_OU_MASK)) {
+            continue;
+        }
+#endif
+
+        id_x = ELEM_ID(id_x); id_x_ = ELEM_ID(id_x_);
 
         for (size_t y = x + 2; y < length; y++) {
             size_t y_ = (y + 1) % length;
             // can't overlap
             if (y_ == x) continue;
 
-            if ((id_x == (code[y_] >> ELEM_ID_SHIFT) && id_x_ == (code[y] >> ELEM_ID_SHIFT)) ||
-                (id_x == (code[y] >> ELEM_ID_SHIFT) && id_x_ == (code[y_] >> ELEM_ID_SHIFT))) {
+            if ((id_x == ELEM_ID(code[y_]) && id_x_ == ELEM_ID(code[y])) ||
+                (id_x == ELEM_ID(code[y]) && id_x_ == ELEM_ID(code[y_]))) {
                 list.push_back(r2_do(code, x, y));
                 continue;
             }
@@ -360,6 +430,15 @@ static bool is_triangular(const code_t& code, size_t x, size_t x_,
         // checked triangular nature
     }
 
+#ifdef FLAT_KNOTS
+    if (SIGN(code[x]) == SIGN(code[y]) && SIGN(code[y]) == SIGN(code[z]) &&
+        SIGN(code[x_]) == SIGN(code[y_]) && SIGN(code[y_]) == SIGN(code[z_]) &&
+        SIGN(code[x]) != SIGN(code[x_])) {
+        return true;
+    } else {
+        return false;
+    }
+#else
     int sum = SIGN(code[x]) + SIGN(code[x_]) + SIGN(code[y_]);
     if (sum != -1) {
         return false;
@@ -381,6 +460,7 @@ static bool is_triangular(const code_t& code, size_t x, size_t x_,
     // the correct one should be +1
 
     return true;
+#endif
 }
 
 // the case with the single crossing (single crossing, triangular,
@@ -400,6 +480,15 @@ static bool is_crossingular(const code_t& code, size_t x, size_t x_,
         // checked crossingular nature
     }
 
+#ifdef FLAT_KNOTS
+    if (SIGN(code[x]) == SIGN(code[x_]) && SIGN(code[y]) == SIGN(code[y_]) &&
+        SIGN(code[z]) == SIGN(code[y]) && SIGN(code[z_]) == SIGN(code[x]) &&
+        SIGN(code[x]) != SIGN(code[y])) {
+        return true;
+    } else {
+        return false;
+    }
+#else
     int sum = SIGN(code[x]) + SIGN(code[x_]) + SIGN(code[y_]);
     if (sum == -1) {
         // two negatives and one positive
@@ -447,6 +536,7 @@ static bool is_crossingular(const code_t& code, size_t x, size_t x_,
     } else {
         return false;
     }
+#endif
 }
 
 // check if we can do a r3 move at x, y, z

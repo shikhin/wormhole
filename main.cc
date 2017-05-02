@@ -18,7 +18,9 @@ int main(int argc, char const *argv[])
 
         display_code(code);
         std::cout << "Planar? " << (planar_knot(code) ? "true" : "false") << std::endl;
+#ifndef FLAT_KNOTS
         std::cout << "Genus: " << genus(code) << std::endl;
+#endif
 
         std::cout << "Enumerating r2 moves" << std::endl;
         std::vector<code_t> list = r2_undo_enumerate(code);
@@ -64,13 +66,15 @@ int main(int argc, char const *argv[])
             display_code(r1_done_list[i]);
         }
 
-        std::cout << "All neighbors" << std::endl;
+        std::cout << "All planar neighbors" << std::endl;
         list = enumerate_complete_neighbors(code);
 
         std::sort(list.begin(), list.end());
         list.erase(std::unique(list.begin(), list.end()), list.end());
         for (size_t i = 0; i < list.size(); i++) {
-            display_code(list[i]);
+            if (planar_knot(list[i])) {
+                display_code(list[i]);
+            }
         }
 
         // subdiagrams(code);

@@ -29,7 +29,7 @@ namespace std {
 }
 
 #ifdef TEST_BRUTE
-static const size_t max_indices = 4000;
+static const size_t max_indices = 6000;
 static size_t cur_index = 0, not_added = 0;
 
 static node_t* node_table[max_indices];
@@ -73,7 +73,7 @@ static node_t* get_node(const code_t& code)
 #ifdef TEST_BRUTE
         node->index = max_indices;
 #endif
-        node->genus = genus(code);
+        node->planar = planar_knot(code);
 
         graph_nodes[code] = node;
     } else {
@@ -85,12 +85,12 @@ static node_t* get_node(const code_t& code)
 
 static bool is_planar(const node_t* node)
 {
-    return (node->genus <= 0);
+    return node->planar;
 }
 
 static bool is_planar(const code_t& code)
 {
-    return is_planar(get_node(code));
+    return get_node(code)->planar;
 }
 
 static void add_neighbors(node_t *node, std::vector<code_t>& neighbors)
@@ -184,6 +184,38 @@ static node_t* s_ify(node_t* node)
     brute_insert_node(node);
 #endif
 
+#ifdef TEST_ANY_RETRACTION
+    if (is_planar(node)) {
+        // if it's planar, it has to map to itself
+        node->s.insert(node);
+        explore_special_neighbors(node);
+    } else {
+        // otherwise we generate possibilities from neighbors
+        // but wait, since possibilities must be either every neighbor's s or one distance
+        // away from every neighbor's s, just generating possibilities from one neighbor
+        // is fine
+        for (auto n: node->neighbors) {
+            // auto n = *(node->neighbors.begin());
+            if (n->s.empty()) {
+                continue;
+            }
+
+            // need to add every neighbor's s or nodes one distance away
+            node->s.insert(n->s.begin(), n->s.end());
+            for (auto s_elem: n->s) {
+                explore_complete_neighbors(s_elem);
+                for (auto s_elem_neighbor: s_elem->neighbors) {
+                    if (is_planar(s_elem_neighbor)) {
+                        explore_special_neighbors(s_elem_neighbor);
+                        node->s.insert(s_elem_neighbor);
+                    }
+                }
+            }
+
+            break;
+        }
+    }
+#else
     generate_subs(node);
 
     if (is_planar(node)) {
@@ -193,6 +225,7 @@ static node_t* s_ify(node_t* node)
         // otherwise all classical subdiagrams are a possibility
         node->s = node->subs;
     }
+#endif
 
 #ifdef TEST_R3_UNIFY
     std::set<node_t*> seen; seen.insert(node);
@@ -434,8 +467,14 @@ void test_brute()
         }
     }
 
+    size_t max_classic = 0, max_virt = 0;
     for (size_t i = 0; i < cur_index; i++) {
         for (size_t j = i + 1; j < cur_index; j++) {
+            if (classical_dist[i][j] != std::numeric_limits<size_t>::max() / 2)
+                max_classic = std::max(max_classic, classical_dist[i][j]);
+            if (virtual_dist[i][j] != std::numeric_limits<size_t>::max() / 2)
+                max_virt = std::max(max_virt, virtual_dist[i][j]);
+            
             if (classical_dist[i][j] != std::numeric_limits<size_t>::max() / 2 &&
                 virtual_dist[i][j] < classical_dist[i][j]) {
                 std::cout << "Candidate " << stringify_code(node_table[i]->code) << " to " << 
@@ -446,41 +485,102 @@ void test_brute()
             }
         }
     }
+
+    std::cout << "Max classical " << max_classic << std::endl;
+    std::cout << "Max virtual " << max_virt << std::endl;
 }
+
+static bool find_node(const code_t& origin, const code_t& dest, size_t depth, 
+                        std::unordered_set<code_t>& visited)
+{
+    if (!depth) {
+        if (origin == dest) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    auto list = enumerate_complete_neighbors(origin);
+    for (auto iter: list) {
+        auto find = visited.find(iter);
+        if (find != visited.end()) { 
+            continue;
+        } else {
+            visited.insert(iter);
+        }
+
+        if (iter == dest) { 
+            return true;
+        } else if (!planar_knot(iter)) {
+            continue;
+        } if (find_node(iter, dest, depth - 1, visited)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 #endif
 
 void explore()
 {
     chunk = new node_t[chunk_size];
 
+    // while (true) {
+    //     std::string origin, dest; int len;
+    //     std::cin >> origin >> dest >> len;
+
+    //     std::unordered_set<code_t> visited; visited.insert(parse_code(origin));
+    //     std::cout << find_node(parse_code(origin),
+    //                            parse_code(dest),
+    //                            len, visited);
+    // }
+    // return;
+
     // add the unknot
     // parse_code("U-0U-1O-2O+3U+3U-2U+4O+5O-1O+4U+5O+6U+6O-0")
-    node_t* node = prune_ify(code_t());
+    node_t* node = prune_ify(parse_code("U-0U+1O+2O-0O-3U-3O+1U+2"));
     explore_complete_neighbors(node);
     for (auto n: node->neighbors) {
-        if (n->code.size() > 2 * MAX_CHORDS) continue;
+        // if (n->code.size() > 2 * MAX_CHORDS) continue;
 
         prune_ify(n);
-        explore_special_neighbors(n);
+        // continue;
+        test_hillary();
+        explore_complete_neighbors(n);
         for (auto nn: n->neighbors) {
-            if (nn->code.size() > 2 * MAX_CHORDS) continue;
+            // if (nn->code.size() > 2 * MAX_CHORDS) continue;
 
             prune_ify(nn);
+            test_hillary();
+            continue;
             explore_special_neighbors(nn);
-            // explore_complete_neighbors(nn);
+            explore_complete_neighbors(nn);
             for (auto nnn: nn->neighbors) {
-                if (nnn->code.size() > 2 * MAX_CHORDS) continue;
+                // if (nnn->code.size() > 2 * MAX_CHORDS) continue;
 
                 prune_ify(nnn);
-            //     // explore_special_neighbors(nnn);
-            //     // // explore_complete_neighbors(nnn);
-            //     // for (auto nnnn: nnn->neighbors) {
-            //     //     if (n->code.size() > 2 * MAX_CHORDS) continue;
+                test_hillary();
+                // continue;
+                explore_special_neighbors(nnn);
+                // explore_complete_neighbors(nnn);
+                for (auto nnnn: nnn->neighbors) {
+                    // if (nnnn->code.size() > 2 * MAX_CHORDS) continue;
 
-            //     //     prune_ify(nnnn);
-            //     // }
+                    prune_ify(nnnn);
+                    break;
+                    // if (not_added > 0) break;
+                }
+
+                // if (not_added > 0) break;
             }
+
+            // if (not_added > 0) break;
         }
+
+        // if (not_added > 0) break;
     }
 
 #ifdef TEST_MENU
@@ -498,6 +598,7 @@ void explore()
     std::cout << "Finished brute test" << std::endl;
 #endif
 
+    std::cout << "Going after " << prune_dirty.size() << " nodes" << std::endl;
     std::cout << "Beginning hillary test" << std::endl;
     test_hillary();
     std::cout << "Finished hillary test" << std::endl;
